@@ -99,11 +99,91 @@
 ### 1.ReplicaSet
 
 1. ReplicaSet 是 Kubernetes 系统中的核心核心概念之一。**作为一个编排对象，它通过“控制器模式”，保证集群中它所控制的 Pod 的个数永远等于用户期望的个数**。
-2. 
+
+2. 在 ReplicaSet 这个 YAML 文件中，最重要的字段就是 **spec.replicas,** **spec.selector**。
+
+   - `spec.replicas` - 指定了期望的 Pod 个数
+   - `spec.selector` - 用于筛选目标 Pod
+
+   由此 YAML 创建的 ReplicaSet 将根据 spec.selector 来统计具有 app: nginx 标签的 Pod 的数量，当数量不足 3 个时，将根据 template 模板创建Pod。所以**请确保spec.selector 和 template.metadata.labels 中的标签一致**，否则 ReplicaSet 将不停创建 Pod。
+
+
+
+
+
+### 2.Deployment
+
+1. Deployment 也是一个编排对象。它可以被认为是 **ReplicaSet 的升级**，**同样保证了集群中的Pod数量，但他实现了“滚动更新”这个非常重要的功能**。
+
+2. Deployment 控制器==实际操纵的是 **ReplicaSet** 对象，而不是 Pod 对象==。
+
+3. Deployment 实际上是一个两层控制器。首先，它**通过 ReplicaSet 的个数来描述应用的版本**（一个 ReplicaSet 对应 应用的一个版本）；然后，它再**通过 ReplicaSet 的属性**（比如 replicas 的值），**来保证 Pod 的副本数量**。
+
+   ![img](https://qqadapt.qpic.cn/txdocpic/0/a7198a5546ddb681be69632b49227c60/0?w=341&h=321)
+
+   
+
+
+
+### 3.StatefulSet
+
+1. Deployment 假设的是一个应用的所有 Pod， 是完全一样的，是**无状态的**。但是有些应用的多个 Pod 之间往往有顺序，主从关系，或者 Pod 对外部数据有依赖关系，这些应用是**有状态的**。所以，Kubernetes 扩展出了 `StaefulSet` 这个编排对象。
+
+2. Kubernetes 把有状态应用分为了两种情况：
+
+   1. **拓扑状态**：Pod **必须按照某些顺序**启动，更新或重新创建。且每个节点都有唯一的网络标识，即使 Pod 重新创建后的网络标识也应该和原来一样。
+   2. **存储状态**：Pod 所存储的数据应该是持久的。即使 Pod 重新创建后，读取到的数据也应该是同一份。
+
+3. **StatefulSet 解决方式**：
+
+   1. StatefulSet 会对Pod进行编号，并且按照编号顺序逐一完成创建、更新等工作。StatefulSet 通过 Headless Service 的方式，为每个 Pod 创建了一个固定并且稳定的 DNS 记录，来作为它的访问入口。
+   2. StatefulSet 通过 PV (Persistent Volume) 和 PVC (Persistent Volume Claim) 来实现持久化存储。
+
+   使用场景：MySQL, MongoDB, Akka, ZooKeeper 等
+
+### 4.DaemonSet
+
+1. 顾名思义，DaemonSet 的主要作用，<u>是让你在 Kubernetes 集群里，运行一个 Daemon Pod。</u> 所以，这个 Pod 有如下四个特征：
+   1. 这个 Pod **运行在** Kubernetes 集群里的**每一个节点（Node）上**；
+   2. **每个节点上只有一个**这样的 Pod 实例；
+   3. 当有新的节点加入 Kubernetes 集群后，该 Pod 会自动地在新节点上被创建出来；而当旧节点被删除后，它上面的 Pod 也相应地会被回收掉；当节点上的 Pod 出现异常时，会由 Daemonset 进行恢复。
+   4. 删除 DaemonSet 将会删除它创建的所有 Pod
+2. `DaemonSet `**使用场景**：
+   1. 各种**网络插件**的 Agent 组件，都必须运行在每一个节点上，用来处理这个节点上的容器网络；
+   2. 各种**存储插件**的 Agent 组件，也必须运行在每一个节点上，用来在这个节点上挂载远程存储目录，操作容器的 Volume 目录；
+   3. 各种**监控组件和日志组件**，也必须运行在每一个节点上，负责这个节点上的监控信息和日志搜集。
+
+
+
+==Deployment，StatefulSet，DamonSet 编排的对象都是长作业，应用一旦运行起来，它的容器进程会一直保持 Running 状态。== 而Job和CronJob编排的对象不是长作业
+
+### 5.Job
+
+1. Job 负责==**计算业务**==：
+   1. Job 所控制的 Pod 副本都是**短暂运行**的（成功完成计算任务 Pod就停止，不会再重启）**。**
+   2. Job 所控制的 Pod 副本的工作模式能够**多实例并行计算。**
+   3. Job 可以根据依赖关系，保证任务的顺序进行。
+2. Job 会创建**一个或者多个 Pods**，并确保指定数量的 Pods 成功终止。 随着 Pods 成功结束，Job 跟踪记录成功完成的 Pods 个数。 **当数量达到指定的成功个数阈值时，任务（即 Job）结束**。 删除 Job 的操作会清除所创建的全部 Pods。
+3. 一种简单的使用场景下，可以**创建一个 Job 对象以便以一种可靠的方式运行某 Pod 直到完成**。 当第一个 Pod 失败或者被删除（比如因为节点硬件失效或者重启）时，Job 对象会启动一个新的 Pod。
+
+
+
+### 6.CronJob
+
+1. CronJob是**基于时间调度的Job**，它对于**创建周期性的、反复重复的任务很有用**，例如执行<u>数据备份或者发送邮件</u>。
+2. CronJob 与 Job 的关系，正如同 Deployment 与 ReplicaSet 的关系一样：**CronJob 仅负责创建与其调度时间相匹配的 Job，而 Job 又负责管理其代表的 Pod**。
+3. 值得注意的是：**Job应该是幂等的**。
 
 
 
 ## 3.2服务对象
+
+
+
+### 1.Service
+
+1. Service 是 Kubernetes 中的核心概念之一。我们之前讲述的编排对象 ReplicaSet, Deployment 等都是在为 Service 作铺垫。
+2. 
 
 
 
@@ -112,3 +192,13 @@
 
 
 ## 3.4权限控制对象
+
+
+
+
+
+# 参考资料
+
+1. K8s基础与实践
+
+   https://docs.qq.com/doc/DVEticm93aWhJcWRP
