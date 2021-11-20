@@ -88,7 +88,7 @@
 
 # 3.常用资源对象
 
-在本章中，1-6 节讲述的是**编排对象**，它们使用不同策略编排 Pod。而 1-6 节都在为 第7节的 服务对象 Service 作铺垫。
+在本章中，1-6 节讲述的是**编排对象**，它们使用不同策略编排 Pod。而 1-6 节都在为 第7节的 **服务对象** Service 作铺垫。
 
 8-9 节讲述的是 Pod 的存储和配置对象。
 
@@ -182,16 +182,71 @@
 
 ### 1.Service
 
-1. Service 是 Kubernetes 中的核心概念之一。我们之前讲述的编排对象 ReplicaSet, Deployment 等都是在为 Service 作铺垫。
-2. 
+1. Service 是 Kubernetes 中的核心概念之一。我们之前讲述的**编排对象** `ReplicaSet`, `Deployment` 等都是在为 `Service` **作铺垫。**
+
+2. 我们知道 **Pod 需要对外提供服务**，但是 P**od 的 IP 地址等信息不是固定的**，通过 Pod IP+port 来访问服务是很困难的。所以，K8S 提出了 Service 服务对象。
+
+3. Service 的主要作用就是，==**作为一个服务的访问入口，用户可以通过这个入口地址访问其背后的一组由Pod副本组成的集群实例**==。<u>用户通过访问固定的 IP+port，Service 就会根据负载均衡机制，将用户请求发送到它所管理的某一个 Pod 中</u>。
+
+4. 我们用一副图来表示 Service, ReplicaSet 和 Pod 之间的关系。
+
+   ​                 ![img](https://qqadapt.qpic.cn/txdocpic/0/1b635f90cbef7c11d0e505dfc7a1a6fc/0?w=1413&h=619)
+
+   可以看见，前端应用（Pod）**通过访问 Service 来获取后端应用提供的服务**。`Service` 和 `ReplicaSet` 都通过 `Label `来选择它们所管理的 Pod。 
+   
+   ==RS 等**编排对象**的作用实际上是**保证 Service 的服务能力和服务质量始终符合预期标准**==。        
+   
+   
 
 
 
-## 3.3存储和配置对象
+## 3.3存储对象volume
+
+1. 一个 Pod 中的容器可以声明共享同一个 Volume。Volume实际上就是一个 Pod 中能够被多个容器访问的**共享目录**。
+
+2. 在 K8S 中，Volume 是定义在 **Pod 层级**的，**Pod 中的容器只需要声明挂载这个 Volume 就可以开始共享这个目录。**
+
+   由于 Volume 是定义在 Pod 层级的，所以 **Volume 的生命周期和 Pod 的生命周期相同**，即使 Pod 中的容器重启或停止了，Volume 中的数据也不会丢失，重启后的容器仍然能从该 Volume 中读取到之前的数据。
+
+3. K8S 支持多种类型的 Volume。
+
+   1. **emptyDir**：临时 Volume，当 Pod 被移除后，该 Volume 中的数据将被永久删除
+   2. **hostPath**：使用宿主机上的目录作为 Volume，即使 Pod 被移除了，其中数据也会被保存在宿主机上，但是它们不能被”迁移“到其他节点上。
+   3. **远程存储服务器**：NFS，rbd，gcePersistentDisk等。使用远程存储服务器作为 Volume，即使 Pod 被移除了，数据会被永久保存在远程服务器上。
 
 
 
-## 3.4权限控制对象
+## 3.4配置对象
+
+### 1.ConfigMap 和 Secret 
+
+1. ConfigMap 和 Secret 是两种特殊的 Volume，它们属于 K8S 中的**服务对象**。它们不是为了存储数据，也不是为了容器间的数据交换，而是为了**给容器提供预先定义好的数据**。
+2. ConfigMap 和 Secret 对象会预先存放进 etcd 中，当容器声明挂载这些 Volume 后，就可以从相应的 mountPath 中读取到这些信息了。
+3. **ConfigMap** 中存放的是不需要加密的，应用所需的**配置信息**，比如挂载 Pod 用的配置文件、环境变量、命令行参数等。
+4. **Secret** 中存放的是加密的数据，比如数据库的用户名和密码，token等。其中的敏感数据采用 base-64 编码保存，相比存储在明文中的 ConfigMap 更加规范与安全。
+
+
+
+### 2.ServiceAccount
+
+1. **ServiceAccount** 对象的作用，就是 K8S 系统内置的一种”服务账户“，它是 K8S 进行权限分配的对象，解决了 **Pod 在集群中的身份认证问题。**
+2. 它其实是一种**特殊的 Secret**，==**应用 Pod 必须使用 ServiceAccount 中保存的授权信息，才能合法地访问 API Server**==。如果 Pod 没有声明 ServiceAccountName，Kubernetes 会自动在它的 Namespace 下创建一个名叫 default 的默认 ServiceAccount，然后分配给这个 Pod。
+
+
+
+
+
+## 3.5权限控制对象RBAC
+
+1. Kubernetes 中所有的 API 对象，都保存在 Etcd 里。可是，对这些 API 对象的操作，却一定都是通过访问 kube-apiserver 实现的。其中一个非常重要的原因，就是你**需要 APIServer 来帮助你做授权工作**。
+2. 而在 Kubernetes 项目中，**负责完成授权（Authorization）工作的机制，就是 RBAC**：基于角色的访问控制（Role-Based Access Control）。
+3. 在 RBAC 中，有三个最基本的概念。
+   1. **Role**：角色，它其实是一组**规则**，定义了一组对 Kubernetes API 对象的操作权限。
+   2. **Subject**：被作用者，既可以是“人”，也可以是“机器”，也可以是你在 Kubernetes 里定义的“用户”。
+   3. **RoleBinding**：定义了“被作用者”和“角色”的绑定关系。
+4. Role 本身就是一个 API 对象
+5. RoleBinding 也是一个 API 对象。它指定了规则的被作用者。
+6. **对于非 Namespaced（Non-namespaced）对象（比如：Node），或者，某一个 Role 想要作用于所有的 Namespace 的时候，**我们可以使用 **ClusterRole** 和 **ClusterRoleBinding** 进行授权。。这两个 API 对象的用法跟 Role 和 RoleBinding 完全一样。只不过，它们的定义里，没有 Namespace 字段。
 
 
 
