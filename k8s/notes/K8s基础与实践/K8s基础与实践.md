@@ -86,6 +86,24 @@
 
 
 
+
+
+
+
+
+
+
+
+## 4.核心组件运行机制
+
+1. 我们以创建一个编排对象 `ReplicaSet `来说明 Kubernetes 核心组件的运行机制。
+2. 这里提到的 ReplicaSet 属于 Deployment 的一个子集，Deployment 通过**控制一个或多个 RS 来维持副本数**。除此之外 Deployment 还支持滚动升级和回滚操作。
+3. ReplicaSet 负责通过“**控制器模式**”，保证系统中它所控制的 Pod 的个数永远等于指定的个数。
+
+​                 ![img](https://qqadapt.qpic.cn/txdocpic/0/b33a50f4ae02b2a291e758ccac4e8de6/0?w=1033&h=687)        
+
+
+
 # 3.常用资源对象
 
 在本章中，1-6 节讲述的是**编排对象**，它们使用不同策略编排 Pod。而 1-6 节都在为 第7节的 **服务对象** Service 作铺垫。
